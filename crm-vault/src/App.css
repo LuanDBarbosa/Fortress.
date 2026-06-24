@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', sans-serif;
+  --font-geist: 'Geist Sans', sans-serif;
+
+  --color-slate-900: #0F1115;
+  --color-charcoal-800: #1A1D23;
+  
+  --color-surface: #141314;
+  --color-surface-dim: #141314;
+  --color-surface-bright: #3a3939;
+  --color-surface-container-lowest: #0e0e0e;
+  --color-surface-container-low: #1c1b1c;
+  --color-surface-container: #201f20;
+  --color-surface-container-high: #2a2a2a;
+  --color-surface-container-highest: #353435;
+  
+  --color-electric-blue: #00E5FF;
+  --color-neon-teal: #00FFA3;
+  --color-cyber-purple: #7000FF;
+  --color-vault-green: #22C55E;
+
+  --color-glass-stroke: rgba(255, 255, 255, 0.08);
+
+  --radius-sm: 0.25rem;
+  --radius-DEFAULT: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+}
+
+@layer utilities {
+  .font-geist {
+    font-family: var(--font-geist);
+  }
+  
+  .glass-panel {
+    background-color: rgba(26, 29, 35, 0.4);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--color-glass-stroke);
+  }
+
+  .glass-panel-hover:hover {
+    transform: scale(1.02);
+    border-color: rgba(255, 255, 255, 0.15);
+    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  /* GPU Optimization: Disable heavy blur filters during 60fps drag events */
+  .react-flow__node.dragging .glass-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: rgba(30, 34, 41, 0.95);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--color-glass-stroke);
+  }
+
+  /* GPU Optimization: Disable blur filters across ALL nodes when panning canvas */
+  .is-panning .glass-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: rgba(26, 29, 35, 0.95);
+  }
+
+  .glass-modal {
+    background-color: rgba(26, 29, 35, 0.6);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid var(--color-glass-stroke);
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.1);
+  }
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-slate-900);
+  color: #e5e2e1;
+}
+
+/* ReactFlow overrides */
+.react-flow__pane {
+  background-color: transparent !important;
+}
+.react-flow__edge-path {
+  stroke-width: 1.5;
+  stroke-dasharray: 4;
+}
+
+.react-flow__controls {
+  background-color: var(--color-charcoal-800) !important;
+  border: 1px solid var(--color-glass-stroke) !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+}
+
+.react-flow__controls-button {
+  background-color: transparent !important;
+  border-bottom: 1px solid var(--color-glass-stroke) !important;
+  fill: #94a3b8 !important; /* slate-400 */
+}
+
+.react-flow__controls-button:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  fill: #f8fafc !important; /* slate-50 */
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
