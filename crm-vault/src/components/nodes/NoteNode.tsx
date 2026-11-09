@@ -25,7 +25,7 @@ export const NoteNode = ({ id, data, selected }: any) => {
       <div className="flex flex-col gap-2 relative min-h-[40px]">
         {isEditing ? (
           <TextareaAutosize
-            className="w-full bg-transparent text-slate-200 text-sm focus:outline-none resize-none font-inter leading-relaxed"
+            className="w-full bg-transparent text-slate-200 text-sm focus:outline-none resize-none font-inter leading-relaxed nodrag"
             placeholder="Start typing your note here (Markdown supported)..."
             value={data.text || ''}
             onChange={onChange}
