@@ -30,11 +30,12 @@ export function Layout() {
   };
 
   const spawnNode = (type: string) => {
+    const defaultLabel = type.replace('Node', '');
     addNode({
       id: `node-${Date.now()}`,
       type,
       position: { x: Math.random() * 400 + 100, y: Math.random() * 400 + 100 },
-      data: { label: 'New Node', secrets: [], text: '', tasks: [], links: [], tickets: [] }
+      data: { label: defaultLabel.charAt(0).toUpperCase() + defaultLabel.slice(1), secrets: [], text: '', tasks: [], links: [], tickets: [] }
     });
     setIsMiniDockOpen(false);
   };

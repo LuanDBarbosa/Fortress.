@@ -48,18 +48,33 @@
     transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
-  /* GPU Optimization: Disable heavy blur filters during 60fps drag events */
-  .react-flow__node.dragging .glass-panel {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    background-color: rgba(30, 34, 41, 0.95);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--color-glass-stroke);
+  /* GPU Optimization: Move nodes to dedicated GPU layer to prevent compositing lag on drag start */
+  .react-flow__node {
+    will-change: transform;
   }
 
-  /* GPU Optimization: Disable blur filters across ALL nodes when panning canvas */
-  .is-panning .glass-panel {
+  /* GPU Optimization: Disable heavy blur filters during 60fps drag events */
+  .react-flow__node.dragging *, .react-flow__node.dragging .glass-panel {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    transition: none !important;
+    pointer-events: none !important;
+  }
+  
+  .react-flow__node.dragging .glass-panel {
+    background-color: rgba(30, 34, 41, 0.95) !important;
+    border: 1px solid var(--color-glass-stroke) !important;
+  }
+
+  /* GPU Optimization: Disable blur filters across ALL nodes when panning canvas or actively resizing */
+  .is-panning *, .is-panning .glass-panel, .is-resizing *, .is-resizing.glass-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+  
+  .is-panning .glass-panel, .is-resizing.glass-panel {
     background-color: rgba(26, 29, 35, 0.95);
   }
 
@@ -87,6 +102,22 @@ body {
   stroke-dasharray: 4;
 }
 
+/* Fix EdgeLabelRenderer z-index so buttons are clickable over nodes */
+.react-flow__edgelabel-renderer {
+  z-index: 1000 !important;
+}
+
+/* Massively expand the invisible hit-box for all connection handles to make them easier to click */
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: -12px;
+  right: -12px;
+  bottom: -12px;
+  background: transparent;
+}
+
 .react-flow__controls {
   background-color: var(--color-charcoal-800) !important;
   border: 1px solid var(--color-glass-stroke) !important;
@@ -110,3 +141,37 @@ body {
   border-bottom: none !important;
 }
 
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Custom scrollbar utility class */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}

@@ -3,8 +3,6 @@ import {
   ReactFlow,
   Panel,
   Background,
-  Handle,
-  Position,
   BackgroundVariant,
   Node,
   useViewport,
@@ -15,7 +13,7 @@ import {
   useStore
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Building2, Lock, ArrowRight, LayoutDashboard, FileText, FolderGit2, MessageSquare, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useCanvasStore } from '../store/canvasStore';
 import { usePhysicsLayout } from '../hooks/usePhysicsLayout';
@@ -26,12 +24,15 @@ import { VaultNode } from '../components/nodes/VaultNode';
 import { MediaNode } from '../components/nodes/MediaNode';
 import { BriefingNode } from '../components/nodes/BriefingNode';
 import { TasksNode } from '../components/nodes/TasksNode';
+import { GlobalEnvNode } from '../components/nodes/GlobalEnvNode';
+import { InnerFeatureNode } from '../components/nodes/InnerFeatureNode';
 import { TicketsNode } from '../components/nodes/TicketsNode';
 import { ProjectsNode } from '../components/nodes/ProjectsNode';
 import { FileNode } from '../components/nodes/FileNode';
 import { GroupNode } from '../components/nodes/GroupNode';
 import { CalendarNode } from '../components/nodes/CalendarNode';
 import { GraphNode } from '../components/nodes/GraphNode';
+import CustomEdge from '../components/edges/CustomEdge';
 
 // --- CONTEXT MENU CONTAINER ---
 // Translates static flow coordinates to dynamic screen coordinates for panning
@@ -85,18 +86,21 @@ const ContextMenuContainer = ({ contextMenu, closeContextMenu, selectedNodeIds, 
         closeContextMenu();
       }}
       onAddNode={(type: string) => {
+        const resolvedType = type || (useCanvasStore.getState().activeEnvId ? 'innerFeature' : 'globalEnv');
+        const defaultLabel = resolvedType.replace('Node', '');
         addNode({
           id: `node-${Date.now()}`,
-          type: type || (useCanvasStore.getState().activeEnvId ? 'innerFeature' : 'globalEnv'),
+          type: resolvedType,
           position: initialFlowPos,
           data: { 
-            label: 'New Node',
+            label: defaultLabel.charAt(0).toUpperCase() + defaultLabel.slice(1),
             description: '',
             status: 'DECRYPTED',
             tasksCompleted: 0,
             tasksTotal: 0,
             secrets: []
-          }
+          },
+          style: resolvedType === 'groupNode' ? { width: 300, height: 200 } : resolvedType === 'mediaNode' ? { width: 256, height: 200 } : undefined
         });
         closeContextMenu();
       }}
@@ -104,97 +108,9 @@ const ContextMenuContainer = ({ contextMenu, closeContextMenu, selectedNodeIds, 
   );
 };
 
-const iconMap: Record<string, any> = {
-  Building2, Lock, LayoutDashboard, FileText, FolderGit2, MessageSquare
-};
 
-// --- CUSTOM NODES ---
-
-const GlobalEnvironmentNode = ({ data, selected }: any) => {
-  return (
-    <div 
-      className={`w-80 glass-panel rounded-xl p-5 transition-all cursor-pointer relative ${
-        selected ? 'ring-2 ring-vault-green ring-offset-4 ring-offset-slate-900 border-vault-green/50 shadow-[0_0_20px_rgba(34,197,94,0.2)]' : 'hover:glass-panel-hover'
-      }`}
-      onDoubleClick={() => useCanvasStore.getState().setActiveEnvId(data.id)}
-    >
-      {data.isLocked && (
-        <div className="absolute top-2 right-2 bg-charcoal-800 border border-glass-stroke rounded-full p-1 shadow-md z-10">
-          <Lock size={10} className="text-slate-400" />
-        </div>
-      )}
-      <div className="flex justify-between items-start mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-charcoal-800 flex items-center justify-center border border-glass-stroke">
-            <Building2 size={20} className="text-slate-300" />
-          </div>
-          <div>
-            <h3 className="text-white font-semibold text-lg">{data.label}</h3>
-            <div className="flex items-center gap-1.5 mt-1">
-              <div className={`w-2 h-2 rounded-full ${data.status === 'DECRYPTED' ? 'bg-vault-green shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-slate-500'}`}></div>
-              <span className="text-[10px] font-geist tracking-widest text-slate-400 uppercase">{data.status} • {data.code}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="space-y-2">
-        <div className="flex justify-between text-xs text-slate-400 font-medium">
-          <span>Tasks Completed</span>
-          <span className="text-slate-200">{data.tasksCompleted} / {data.tasksTotal}</span>
-        </div>
-        <div className="h-1 w-full bg-charcoal-800 rounded-full overflow-hidden">
-          <div 
-            className={`h-full ${data.status === 'DECRYPTED' ? 'bg-vault-green' : 'bg-slate-500'}`} 
-            style={{ width: `${data.tasksTotal > 0 ? (data.tasksCompleted / data.tasksTotal) * 100 : 0}%` }}
-          ></div>
-        </div>
-      </div>
-      
-      <div className="mt-4 flex justify-between items-center">
-        <div className="flex gap-2">
-          {data.tag && (
-            <span className="text-[10px] px-2 py-1 rounded border border-red-500/20 bg-red-500/10 text-red-400 font-geist uppercase">
-              {data.tag}
-            </span>
-          )}
-        </div>
-        <div 
-          className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center ml-auto hover:bg-white/10 hover:text-white transition-colors"
-          onClick={(e) => {
-            e.stopPropagation();
-            useCanvasStore.getState().setActiveEnvId(data.id);
-          }}
-        >
-          <ArrowRight size={12} className="text-slate-400 hover:text-white transition-colors" />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const InnerFeatureNode = ({ data, selected }: any) => {
-  const IconComponent = iconMap[data.iconName] || FileText;
-  return (
-    <div className={`w-64 glass-panel rounded-xl p-4 cursor-pointer transition-colors relative ${
-      selected ? 'ring-2 ring-electric-blue border-electric-blue/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'hover:border-slate-500'
-    }`}>
-      {data.isLocked && (
-        <div className={`absolute top-2 right-2 rounded-full p-1 shadow-md z-10 ${data.colorClass ? data.colorClass.replace('bg-opacity-20', '').replace('/20', '') : 'bg-charcoal-800 border border-glass-stroke text-slate-400'}`}>
-          <Lock size={10} />
-        </div>
-      )}
-      <Handle type="target" position={Position.Left} className="w-2 h-2 !bg-slate-500 border-none" />
-      <div className="flex items-center gap-3 mb-2">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${data.colorClass || 'bg-slate-500/20 text-slate-400'}`}>
-          <IconComponent size={16} />
-        </div>
-        <h3 className="text-white font-medium">{data.label}</h3>
-      </div>
-      <p className="text-xs text-slate-400 mt-2">{data.description}</p>
-      <Handle type="source" position={Position.Right} className="w-2 h-2 !bg-slate-500 border-none" />
-    </div>
-  );
+const edgeTypes = {
+  default: CustomEdge,
 };
 
 // --- CUSTOM CONTROLS ---
@@ -239,9 +155,7 @@ export function Dashboard() {
     pasteNodes,
     deleteNodes,
     groupNodes,
-    detachNodeFromGroup,
-    attachNodeToGroup,
-    undo,
+        undo,
     redo
   } = useCanvasStore(useShallow(state => ({
     setActiveEnvId: state.setActiveEnvId,
@@ -266,23 +180,36 @@ export function Dashboard() {
     localNodesRef.current = localNodes;
   }, [localNodes]);
 
+  const isInteracting = useCanvasStore(state => state.isInteracting);
+  const setIsInteracting = useCanvasStore(state => state.setIsInteracting);
+
   // Sync from Global Store -> Local (Only runs if store array reference actually changes)
+  // PAUSE sync if actively dragging/resizing to prevent VDOM stutter!
   useEffect(() => {
-    setLocalNodes(storeNodes);
-  }, [storeNodes, setLocalNodes]);
+    if (!isInteracting) {
+      setLocalNodes(storeNodes);
+    }
+  }, [storeNodes, setLocalNodes, isInteracting]);
 
   useEffect(() => {
     setLocalEdges(storeEdges);
   }, [storeEdges, setLocalEdges]);
 
-  // Intercept ReactFlow changes: Keep local state at 144fps, but ONLY sync to global store 
-  // when NOT actively dragging! This completely eliminates React reconciliation stutter!
   const handleLocalNodesChange = useCallback((changes: any[]) => {
     onLocalNodesChange(changes);
     
-    const nonDragChanges = changes.filter(c => c.type !== 'position' || !c.dragging);
+    const isActivelyInteracting = changes.some(c => c.dragging || c.resizing);
+    
+    // Filter out continuous position and dimensions changes to prevent 144fps global store updates
+    // which would cause massive React tree re-renders and stuttering.
+    const nonDragChanges = changes.filter(c => {
+      if ((c.type === 'position' || c.type === 'dimensions') && isActivelyInteracting) {
+        return false;
+      }
+      return true;
+    });
+
     if (nonDragChanges.length > 0) {
-      // Defer global store updates to avoid React render cycle conflicts (fixes warning)
       setTimeout(() => {
         useCanvasStore.getState().onNodesChange(nonDragChanges);
       }, 0);
@@ -309,7 +236,7 @@ export function Dashboard() {
   const flowWrapperRef = useRef<HTMLDivElement>(null);
 
   const nodeTypes = useMemo(() => ({
-    globalEnv: GlobalEnvironmentNode,
+    globalEnv: GlobalEnvNode,
     innerFeature: InnerFeatureNode,
     noteNode: NoteNode,
     vaultNode: VaultNode,
@@ -396,7 +323,7 @@ export function Dashboard() {
 
   // DRAG HISTORY PAUSE
   const onNodeDragStart = () => {
-    // History is paused by not having continuous position changes in the history stack
+    setIsInteracting(true);
   };
   
   // Removed separate onNodeDragStop callback to avoid race conditions with grouping
@@ -412,7 +339,19 @@ export function Dashboard() {
         // Fallback for right click if React Flow swallows it due to panOnDrag settings
         if (!e.defaultPrevented) {
           e.preventDefault();
-          setContextMenu({ x: e.clientX, y: e.clientY });
+          const target = e.target as HTMLElement;
+          
+          if (target.closest('.react-flow__node')) {
+            return; // Let node handlers do their thing
+          }
+          
+          if (selectedNodeIds.length > 0) {
+            // Right-clicking the selection pane should show node actions!
+            setContextMenu({ x: e.clientX, y: e.clientY, nodeId: selectedNodeIds[0] });
+          } else {
+            // Normal canvas right click
+            setContextMenu({ x: e.clientX, y: e.clientY });
+          }
         }
       }}
     >
@@ -446,6 +385,7 @@ export function Dashboard() {
         onEdgesChange={handleLocalEdgesChange}
         onConnect={useCanvasStore.getState().onConnect}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onSelectionChange={handleSelectionChange}
         onNodeContextMenu={onNodeContextMenu}
         onPaneContextMenu={onPaneContextMenu}
@@ -454,6 +394,7 @@ export function Dashboard() {
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={(_, node) => {
           setTimeout(() => {
+            setIsInteracting(false);
             // 1. Push ALL final physics positions to the global store FIRST
             const currentLocalNodes = localNodesRef.current;
             const changes = currentLocalNodes.map(n => ({ type: 'position', id: n.id, position: n.position }));
@@ -465,22 +406,44 @@ export function Dashboard() {
               return;
             }
 
-            // Check for dragging out of group
+            // Check for dragging out of group or resizing
             if (node.parentId) {
               const parent = currentLocalNodes.find((n: any) => n.id === node.parentId);
               if (parent) {
                 const absX = parent.position.x + node.position.x;
                 const absY = parent.position.y + node.position.y;
-                const w = parent.style?.width as number || parent.measured?.width || 0;
-                const h = parent.style?.height as number || parent.measured?.height || 0;
+                const parentW = parent.style?.width as number || parent.measured?.width || 0;
+                const parentH = parent.style?.height as number || parent.measured?.height || 0;
+                const nodeW = node.style?.width as number || node.measured?.width || 250;
+                const nodeH = node.style?.height as number || node.measured?.height || 150;
                 
+                // If completely dragged out, detach it
                 if (
-                  node.position.x < 0 || 
-                  node.position.y < 0 || 
-                  node.position.x > w || 
-                  node.position.y > h
+                  node.position.x + nodeW < 0 || 
+                  node.position.y + nodeH < 0 || 
+                  node.position.x > parentW || 
+                  node.position.y > parentH
                 ) {
                   useCanvasStore.getState().detachNodeFromGroup(node.id, { x: absX, y: absY });
+                } else {
+                  // If pushed near right/bottom edge, auto-resize parent group
+                  const PADDING = 40;
+                  let newW = parentW;
+                  let newH = parentH;
+                  let needsResize = false;
+
+                  if (node.position.x + nodeW + PADDING > parentW) {
+                    newW = node.position.x + nodeW + PADDING;
+                    needsResize = true;
+                  }
+                  if (node.position.y + nodeH + PADDING > parentH) {
+                    newH = node.position.y + nodeH + PADDING;
+                    needsResize = true;
+                  }
+
+                  if (needsResize) {
+                    useCanvasStore.getState().updateNodeStyle(parent.id, { width: newW, height: newH });
+                  }
                 }
               }
             } else {
