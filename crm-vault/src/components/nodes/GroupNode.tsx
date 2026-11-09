@@ -21,7 +21,17 @@ export const GroupNode = ({ id, data, selected }: any) => {
         isVisible={selected} 
         minWidth={200} 
         minHeight={150} 
-        handleClassName={`w-3 h-3 rounded-sm border-none`}
+        handleClassName="w-3 h-3 rounded-sm border-none nodrag z-[100]"
+        lineClassName="z-[100]"
+        onResizeStart={() => {
+          useCanvasStore.getState().setIsInteracting(true);
+        }}
+        onResizeEnd={(_evt, params) => {
+          useCanvasStore.getState().updateNodeStyle(id, { width: params.width, height: params.height });
+          useCanvasStore.getState().onNodesChange([{ type: 'position', id, position: { x: params.x, y: params.y } } as any]);
+          useCanvasStore.getState().setIsInteracting(false);
+          useCanvasStore.getState().commitHistory();
+        }}
       />
       
       <div 
@@ -45,7 +55,7 @@ export const GroupNode = ({ id, data, selected }: any) => {
           <div className="flex items-center gap-3">
             <button 
               onClick={(e) => { e.stopPropagation(); ungroupNodes(id); }}
-              className="flex items-center gap-1 bg-red-500/20 text-red-400 hover:bg-red-500/40 hover:text-white px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer z-50"
+              className="nodrag flex items-center gap-1 bg-red-500/20 text-red-400 hover:bg-red-500/40 hover:text-white px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer z-50"
             >
               <Ungroup size={12} /> Ungroup
             </button>
