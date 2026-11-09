@@ -39,14 +39,18 @@ export interface CanvasState {
   redo: () => void;
   
   // Actions
+  isInteracting: boolean;
+  setIsInteracting: (val: boolean) => void;
   setActiveEnvId: (id: string | null) => void;
   onNodesChange: (changes: NodeChange<Node>[]) => void;
   onEdgesChange: (changes: EdgeChange<Edge>[]) => void;
   onConnect: (connection: Connection) => void;
   addNode: (node: Node) => void;
   updateNode: (id: string, data: any) => void;
+  updateNodeStyle: (id: string, style: any) => void;
   updateGlobalNode: (id: string, data: any) => void;
   deleteNodes: (ids: string[]) => void;
+  deleteEdges: (ids: string[]) => void;
   copyNodes: (ids: string[]) => void;
   pasteNodes: () => void;
   toggleLockNodes: (ids: string[]) => void;
@@ -145,21 +149,36 @@ export const useCanvasStore = create<CanvasState>()(
         });
       },
 
+      isInteracting: false,
+      setIsInteracting: (val) => set({ isInteracting: val }),
+
       setActiveEnvId: (id) => set({ activeEnvId: id }),
 
       onNodesChange: (changes: NodeChange<Node>[]) => {
         const { activeEnvId, globalNodes, envNodes } = get();
+        
+        const currentNodes = activeEnvId ? (envNodes[activeEnvId] || []) : globalNodes;
+        let newNodes = applyNodeChanges(changes, currentNodes) as Node[];
+        
+        // Sync dimensions into style to prevent snap-back for nodes with initial styles
+        changes.forEach(c => {
+           if (c.type === 'dimensions' && c.dimensions) {
+              newNodes = newNodes.map(n => 
+                 n.id === c.id ? { ...n, style: { ...n.style, width: c.dimensions?.width, height: c.dimensions?.height } } : n
+              );
+           }
+        });
+
         if (activeEnvId) {
-          const currentNodes = envNodes[activeEnvId] || [];
           set({
             envNodes: {
               ...envNodes,
-              [activeEnvId]: applyNodeChanges(changes, currentNodes) as Node[],
+              [activeEnvId]: newNodes,
             },
           });
         } else {
           set({
-            globalNodes: applyNodeChanges(changes, globalNodes) as Node[],
+            globalNodes: newNodes,
           });
         }
       },
@@ -233,12 +252,48 @@ export const useCanvasStore = create<CanvasState>()(
         }
       },
 
+      updateNodeStyle: (id: string, style: any) => {
+        get().commitHistory();
+        const { activeEnvId, globalNodes, envNodes } = get();
+        if (activeEnvId) {
+          const currentNodes = envNodes[activeEnvId] || [];
+          set({
+            envNodes: {
+              ...envNodes,
+              [activeEnvId]: currentNodes.map((n) => (n.id === id ? { ...n, style: { ...n.style, ...style } } : n)),
+            },
+          });
+        } else {
+          set({
+            globalNodes: globalNodes.map((n) => (n.id === id ? { ...n, style: { ...n.style, ...style } } : n)),
+          });
+        }
+      },
+
       updateGlobalNode: (id: string, data: any) => {
         get().commitHistory();
         const { globalNodes } = get();
         set({
           globalNodes: globalNodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...data } } : n)),
         });
+      },
+
+      deleteEdges: (ids: string[]) => {
+        get().commitHistory();
+        const { activeEnvId, globalEdges, envEdges } = get();
+        if (activeEnvId) {
+          const currentEdges = envEdges[activeEnvId] || [];
+          set({
+            envEdges: {
+              ...envEdges,
+              [activeEnvId]: currentEdges.filter((e) => !ids.includes(e.id)),
+            },
+          });
+        } else {
+          set({
+            globalEdges: globalEdges.filter((e) => !ids.includes(e.id)),
+          });
+        }
       },
 
       deleteNodes: (ids: string[]) => {
@@ -368,18 +423,44 @@ export const useCanvasStore = create<CanvasState>()(
         get().commitHistory();
         const { activeEnvId, envNodes, globalNodes } = get();
         const nodes = activeEnvId ? (envNodes[activeEnvId] || []) : globalNodes;
+
+        // Helper to get absolute position
+        const getAbsolutePosition = (node: any) => {
+          let x = node.position.x;
+          let y = node.position.y;
+          let curr = node;
+          while (curr.parentId) {
+            const parent = nodes.find(n => n.id === curr.parentId);
+            if (!parent) break;
+            x += parent.position.x;
+            y += parent.position.y;
+            curr = parent;
+          }
+          return { x, y };
+        };
+
+        // Find top-level selected nodes (ignore children if their parent is also selected)
+        const topLevelIds = ids.filter(id => {
+          let curr = nodes.find(n => n.id === id);
+          while (curr?.parentId) {
+          const pId = curr.parentId;
+          if (ids.includes(pId)) return false;
+          curr = nodes.find(n => n.id === pId);
+        }
+          return true;
+        });
         
-        const nodesToGroup = nodes.filter(n => ids.includes(n.id));
+        const nodesToGroup = nodes.filter(n => topLevelIds.includes(n.id));
         if (nodesToGroup.length === 0) return;
 
-        // Calculate bounding box
+        // Calculate bounding box using absolute positions
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         nodesToGroup.forEach(n => {
-          const x = n.position.x;
-          const y = n.position.y;
-          // React flow uses measured width/height if available, fallback to 250x150
-          const w = n.measured?.width || 250;
-          const h = n.measured?.height || 150;
+          const absPos = getAbsolutePosition(n);
+          const x = absPos.x;
+          const y = absPos.y;
+          const w = n.measured?.width || (n.style?.width as number) || 250;
+          const h = n.measured?.height || (n.style?.height as number) || 150;
           if (x < minX) minX = x;
           if (y < minY) minY = y;
           if (x + w > maxX) maxX = x + w;
@@ -403,11 +484,12 @@ export const useCanvasStore = create<CanvasState>()(
         };
 
         const updatedNodes = nodes.map(n => {
-          if (ids.includes(n.id)) {
+          if (topLevelIds.includes(n.id)) {
+            const absPos = getAbsolutePosition(n);
             return {
               ...n,
               parentId: groupId,
-              position: { x: n.position.x - groupX, y: n.position.y - groupY },
+              position: { x: absPos.x - groupX, y: absPos.y - groupY },
               zIndex: 1
             };
           }
