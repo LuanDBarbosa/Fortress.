@@ -86,8 +86,10 @@ export function usePhysicsLayout(
       const simNodes = simulationRef.current.nodes();
       let hasDragged = false;
       
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      
       simNodes.forEach((sn: any) => {
-        const currentReactNode = nodes.find(n => n.id === sn.id);
+        const currentReactNode = nodeMap.get(sn.id);
         
         // Locked nodes act as static unmovable obstacles
         if (currentReactNode && currentReactNode.draggable === false) {
@@ -147,8 +149,10 @@ export function usePhysicsLayout(
         lastUpdate = now;
 
         const currentNodes = nodesRef.current;
+        const currentNodesMap = new Map(currentNodes.map(n => [n.id, n]));
+        
         const updated = simNodes.map((sn: any) => {
-          const original = currentNodes.find(n => n.id === sn.id);
+          const original = currentNodesMap.get(sn.id);
           // Never overwrite position of nodes that the user is actively dragging
           if (!original || original.dragging) return null;
           
