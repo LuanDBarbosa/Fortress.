@@ -1,14 +1,27 @@
 import { useState, useEffect, useRef } from 'react';
-import { Handle, Position } from '@xyflow/react';
-import { Image as ImageIcon, UploadCloud, X, Loader2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Handle, Position, NodeResizer } from '@xyflow/react';
+import { UploadCloud, X, Loader2, Maximize, Download } from 'lucide-react';
 import { useCanvasStore } from '../../store/canvasStore';
+import { CustomVideoPlayer } from '../ui/CustomVideoPlayer';
 import { saveMedia, getMedia, deleteMedia } from '../../utils/storage';
 
 export const MediaNode = ({ id, data, selected }: any) => {
   const updateNode = useCanvasStore((state) => state.updateNode);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [mediaDimensions, setMediaDimensions] = useState<{width: number, height: number} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Always cover to eliminate ugly letterboxing.
+  const objectFit = 'cover';
+
+  const handleDoubleClick = (e: any) => {
+    e.stopPropagation();
+    if (mediaUrl) setIsLightboxOpen(true);
+  };
 
   // Load media from DB on mount if we have a key
   useEffect(() => {
@@ -95,70 +108,192 @@ export const MediaNode = ({ id, data, selected }: any) => {
     }
   };
 
-  const clearMedia = async (e: any) => {
+  const clearMedia = (e: any) => {
     e.stopPropagation();
     if (data.mediaKey) {
-      await deleteMedia(data.mediaKey);
-      updateNode(id, { mediaKey: null, mediaType: null });
-      setMediaUrl(null);
+      deleteMedia(data.mediaKey);
+    }
+    setMediaUrl(null);
+    setMediaDimensions(null);
+    useCanvasStore.getState().updateNode(id, { mediaKey: undefined, mediaType: undefined });
+    useCanvasStore.getState().commitHistory();
+  };
+
+  const downloadImage = (e: any) => {
+    e.stopPropagation();
+    if (mediaUrl) {
+      const a = document.createElement('a');
+      a.href = mediaUrl;
+      a.download = `image-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   };
 
+  const autoFitNode = (e: any) => {
+    e.stopPropagation();
+    if (!mediaDimensions) return;
+    
+    // Get current node width to calculate proportional height
+    const nodeElement = document.getElementById(`media-node-${id}`);
+    const currentWidth = nodeElement ? nodeElement.offsetWidth : 300;
+    
+    const aspectRatio = mediaDimensions.width / mediaDimensions.height;
+    const newHeight = Math.max(150, currentWidth / aspectRatio); // Keep minHeight constraint
+    
+    useCanvasStore.getState().updateNodeStyle(id, { width: currentWidth, height: newHeight });
+    useCanvasStore.getState().commitHistory();
+  };
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    const { naturalWidth, naturalHeight } = e.currentTarget;
+    setMediaDimensions({ width: naturalWidth, height: naturalHeight });
+  };
+
+  const handleVideoLoad = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const { videoWidth, videoHeight } = e.currentTarget;
+    setMediaDimensions({ width: videoWidth, height: videoHeight });
+  };
+
+  const showTitle = data.showTitle !== false; // true by default
+  const isRounded = data.isRounded !== false; // true by default
+
   return (
-    <div className={`w-64 glass-panel rounded-xl overflow-hidden transition-colors relative ${
-      selected ? 'ring-2 ring-blue-500/50 border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'hover:border-slate-500/50'
-    }`}>
-      <Handle type="target" position={Position.Left} className="w-2 h-2 !bg-blue-500/50 border-none" />
-      
-      <div className="bg-slate-900/50 min-h-[120px] flex flex-col items-center justify-center relative group">
-        {loading ? (
-          <Loader2 className="animate-spin text-blue-400" size={24} />
-        ) : mediaUrl ? (
-          <>
-            <button 
-              onClick={clearMedia}
-              className="absolute top-2 right-2 bg-charcoal-800/80 p-1 rounded-full text-slate-300 hover:text-white hover:bg-red-500/80 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+    <>
+      <div id={`media-node-${id}`} className={`w-full h-full min-w-[150px] min-h-[150px] flex flex-col glass-panel ${isRounded ? 'rounded-xl' : ''} overflow-hidden transition-colors relative group ${
+        selected ? 'ring-2 ring-blue-500/50 border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'hover:border-slate-500/50'
+      } ${isResizing ? 'is-resizing' : ''}`}>
+        
+        <div 
+          className="flex-1 bg-slate-900/50 flex flex-col items-center justify-center relative min-h-0 w-full h-full"
+          onDoubleClick={handleDoubleClick}
+        >
+          {loading ? (
+            <Loader2 className="animate-spin text-blue-400" size={24} />
+          ) : mediaUrl ? (
+            <>
+              <div 
+                className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                {mediaDimensions && (
+                  <button className="bg-charcoal-800/80 p-1.5 rounded text-slate-300 hover:text-white hover:bg-emerald-500/80 transition-colors backdrop-blur-sm nodrag" 
+                    onClick={autoFitNode}
+                    
+                    title="Auto-Fit Aspect Ratio"
+                  >
+                    <Maximize size={14} />
+                  </button>
+                )}
+                <button className="bg-charcoal-800/80 p-1.5 rounded text-slate-300 hover:text-white hover:bg-blue-500/80 transition-colors backdrop-blur-sm nodrag" 
+                  onClick={downloadImage}
+                  
+                  title="Download Media"
+                >
+                  <Download size={14} />
+                </button>
+                <button className="bg-charcoal-800/80 p-1.5 rounded text-slate-300 hover:text-white hover:bg-red-500/80 transition-colors backdrop-blur-sm nodrag" 
+                  onClick={clearMedia}
+                  
+                  title="Remove Media"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              {data.mediaType === 'video' ? (
+                <CustomVideoPlayer 
+                  src={mediaUrl} 
+                  objectFit={objectFit} 
+                  onLoadedMetadata={handleVideoLoad} 
+                  autoplay={data.autoplay}
+                  loop={data.loop}
+                />
+              ) : (
+                <img src={mediaUrl} alt="node media" className={`w-full h-full object-${objectFit} pointer-events-none`} onLoad={handleImageLoad} />
+              )}
+            </>
+          ) : (
+            <div 
+              className="flex flex-col items-center justify-center p-6 cursor-pointer text-slate-400 hover:text-blue-400 transition-colors w-full h-full"
+              onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
             >
-              <X size={14} />
-            </button>
-            {data.mediaType === 'video' ? (
-              <video src={mediaUrl} controls className="w-full max-h-[200px] object-cover" />
-            ) : (
-              <img src={mediaUrl} alt="node media" className="w-full max-h-[200px] object-cover" />
-            )}
-          </>
-        ) : (
-          <div 
-            className="flex flex-col items-center justify-center p-6 cursor-pointer text-slate-400 hover:text-blue-400 transition-colors w-full h-full"
-            onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-          >
-            <UploadCloud size={24} className="mb-2" />
-            <span className="text-xs font-medium">Click to Add Media</span>
+              <UploadCloud size={24} className="mb-2" />
+              <span className="text-xs font-medium text-center">Click to Add Media</span>
+            </div>
+          )}
+          <input className="hidden nodrag" 
+            type="file" 
+            name="mediaNodeFile"
+            accept="image/*,video/*" 
+            ref={fileInputRef} 
+             
+            onChange={handleFileChange}
+          />
+        </div>
+
+        {/* Floating Caption Bar */}
+        {showTitle && (
+          <div className={`absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center transition-opacity duration-300 ${data.label ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+            <input 
+              name="mediaNodeLabel"
+              value={data.label || ''}
+              onChange={(e) => updateNode(id, { label: e.target.value })}
+              placeholder="Add caption..."
+              className="nodrag bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none w-full backdrop-blur-md shadow-inner"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         )}
-        <input 
-          type="file" 
-          name="mediaNodeFile"
-          accept="image/*,video/*" 
-          ref={fileInputRef} 
-          className="hidden" 
-          onChange={handleFileChange}
-        />
+
       </div>
 
-      <div className="p-3 bg-charcoal-800 border-t border-glass-stroke flex items-center gap-2">
-        <ImageIcon size={14} className="text-blue-400" />
-        <input 
-          name="mediaNodeLabel"
-          value={data.label || ''}
-          onChange={(e) => updateNode(id, { label: e.target.value })}
-          placeholder="Media Caption..."
-          className="bg-transparent text-xs text-white focus:outline-none w-full"
-          onClick={(e) => e.stopPropagation()}
-        />
-      </div>
+      <Handle type="target" position={Position.Left} className="w-2 h-2 !bg-blue-500/50 border-none z-50" />
+      <Handle type="source" position={Position.Right} className="w-2 h-2 !bg-blue-500/50 border-none z-50" />
 
-      <Handle type="source" position={Position.Right} className="w-2 h-2 !bg-blue-500/50 border-none" />
-    </div>
+      <NodeResizer 
+        color="#3b82f6" 
+        isVisible={selected} 
+        minWidth={150} 
+        minHeight={150} 
+        handleClassName="w-3 h-3 rounded-sm border-none bg-blue-500 nodrag z-[100]"
+        lineClassName="z-[100]"
+        onResizeStart={() => {
+          setIsResizing(true);
+          useCanvasStore.getState().setIsInteracting(true);
+        }}
+        onResizeEnd={(_evt, params) => {
+          setIsResizing(false);
+          useCanvasStore.getState().updateNodeStyle(id, { width: params.width, height: params.height });
+          useCanvasStore.getState().onNodesChange([{ type: 'position', id, position: { x: params.x, y: params.y } } as any]);
+          useCanvasStore.getState().setIsInteracting(false);
+          useCanvasStore.getState().commitHistory();
+        }}
+      />
+
+      {/* Lightbox Portal */}
+      {isLightboxOpen && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={(e) => { e.stopPropagation(); setIsLightboxOpen(false); }}
+          onWheel={(e) => e.stopPropagation()} // Prevent canvas zooming while in lightbox
+        >
+          <button className="absolute top-6 right-6 p-2 rounded-full bg-white/10 text-white/70 hover:text-white hover:bg-white/20 transition-colors nodrag" 
+            
+            onClick={() => setIsLightboxOpen(false)}
+          >
+            <X size={24}/>
+          </button>
+          {data.mediaType === 'video' ? (
+            <div className="w-full h-full max-w-[90vw] max-h-[90vh] flex items-center justify-center">
+              <CustomVideoPlayer src={mediaUrl || ""} objectFit="contain" isLightbox={true} />
+            </div>
+          ) : (
+            <img src={mediaUrl || undefined} className="max-w-full max-h-full object-contain shadow-2xl rounded-lg" onClick={e => e.stopPropagation()} />
+          )}
+        </div>,
+        document.body
+      )}
+    </>
   );
 };
